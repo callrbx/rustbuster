@@ -1,34 +1,56 @@
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
+
 use structopt::StructOpt;
+use threadpool::ThreadPool;
 
-#[derive(Debug)]
+mod dir;
+
+#[derive(Debug, StructOpt, Clone)]
 enum Mode {
-    Dir,
+    #[structopt(external_subcommand)]
+    Dir(Vec<String>),
 }
 
-impl FromStr for Mode {
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "dir" => Ok(Mode::Dir),
-            _ => Err(String::from("Invalid Mode")),
-        }
-    }
-
-    type Err = String;
-}
-
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(
     name = "rustbuster",
     author = "Drew Parker",
-    about = "endpoint enumeration tool",
-    long_about = "URL/URI enumeration tool written in Rust."
+    about = "modular endpoint enumeration tool",
+    long_about = "web enumeration tool written in Rust."
 )]
-struct Args {
-    #[structopt(help = "Mode")]
-    mode: Option<Mode>,
+pub struct GlobalArgs {
+    #[structopt(
+        default_value = "4",
+        short = "t",
+        long = "threads",
+        help = "thread count"
+    )]
+    threads: usize,
+    #[structopt(short = "v", long = "verbose", help = "enable verbose output")]
+    verbose: bool,
+    #[structopt(short = "q", long = "quiet", help = "disable normal output")]
+    quiet: bool,
+    #[structopt(short = "z", long = "noprog", help = "disable all progress output")]
+    noprog: bool,
+    #[structopt(
+        short = "w",
+        long = "wordlist",
+        help = "path to wordlist",
+        parse(from_os_str)
+    )]
+    wordlist: Option<PathBuf>,
+    #[structopt(name = "mode", help = "Mode", subcommand)]
+    mode: Mode,
 }
 
 fn main() {
-    println!("Hello, world!");
+    let args = GlobalArgs::from_args();
+
+    let tpool = ThreadPool::new(args.threads);
+
+    let gargs = args.clone();
+
+    match args.mode {
+        Mode::Dir(mode_args) => dir::exec(gargs, mode_args, &tpool),
+    };
 }
