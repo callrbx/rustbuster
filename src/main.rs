@@ -1,7 +1,6 @@
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
 use structopt::StructOpt;
-use threadpool::ThreadPool;
 
 mod dir;
 
@@ -43,14 +42,14 @@ pub struct GlobalArgs {
     mode: Mode,
 }
 
-fn main() {
+fn main() -> io::Result<()> {
     let args = GlobalArgs::from_args();
-
-    let tpool = ThreadPool::new(args.threads);
 
     let gargs = args.clone();
 
     match args.mode {
-        Mode::Dir(mode_args) => dir::exec(gargs, mode_args, &tpool),
+        Mode::Dir(mode_args) => dir::exec(gargs, mode_args)?,
     };
+
+    Ok(())
 }

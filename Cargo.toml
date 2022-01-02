@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 structopt = { version = "0.3", default-features = false }
-threadpool = "*"
+reqwest = { version = "*", features = ["json"] } # reqwest with JSON parsing support
+futures = "*" # for our async / await blocks
+tokio = { version = "*", features = ["full"] } # for our async runtime
