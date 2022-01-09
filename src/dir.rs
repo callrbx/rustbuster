@@ -51,17 +51,17 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
     let reader = BufReader::new(File::open(&wordlist)?);
     let word_count: u64 = count_lines(std::fs::File::open(&wordlist).unwrap())?;
 
-    let neg_status_codes: [u16; 1] = [404];
+    let discard: [u16; 1] = [404];
 
     if !gargs.quiet {
         println!(
-            "{:-^width$}\n[-] Mode: dir\n[-] URL: {}\n[-] Wordlist: {}\n[-] Count: {}\n[-] Threads: {}\n[-] Ignore Status: {:?}\n{:-^width$}\n",
+            "{:-^width$}\n[-] Mode:\tdir\n[-] URL:\t{}\n[-] Wordlist:\t{}\n[-] Count:\t{}\n[-] Threads:\t{}\n[-] Discard:\t{:?}\n{:-^width$}\n",
             "",
             url,
             wordlist.to_str().unwrap(),
             word_count,
             gargs.threads,
-            neg_status_codes,
+            discard,
             "",
             width = 40,
         );
@@ -121,7 +121,7 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
                     let url = r.url().to_string();
                     let bytes = r.bytes().await;
 
-                    if !neg_status_codes.contains(&status) {
+                    if !discard.contains(&status) {
                         if gargs.noprog {
                             if status != 301 {
                                 println!(
