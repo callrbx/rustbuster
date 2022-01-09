@@ -1,12 +1,10 @@
+use futures::{stream, StreamExt}; // 0.3.8use reqwest::Response;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::{
-    collections::VecDeque,
     fs::File,
     io::{self, BufRead, BufReader},
 };
-
-use reqwest::Response;
 use structopt::StructOpt;
-use tokio::runtime::Builder;
 use tokio::time::Duration;
 
 use crate::GlobalArgs;
@@ -18,41 +16,29 @@ use crate::GlobalArgs;
     about = "rustbuster dir enumerator"
 )]
 struct Args {
+    #[structopt(default_value = "1", long = "time", help = "request timeout")]
+    timeout: u64,
     #[structopt(short = "u", long = "url", help = "Target URL")]
     url: String,
 }
 
-async fn scanner(url: String, guess: String, verbose: bool, noprog: bool) -> Option<Response> {
-    let form_url = if url.ends_with('/') {
-        format!("{}{}", url, guess)
-    } else {
-        format!("{}/{}", url, guess)
-    };
-
-    if verbose && !noprog {
-        println!("[-] Trying: {}", &form_url);
+fn count_lines<R: io::Read>(handle: R) -> Result<u64, io::Error> {
+    let mut reader = BufReader::new(handle);
+    let mut count = 0;
+    let mut line: Vec<u8> = Vec::new();
+    while match reader.read_until(b'\n', &mut line) {
+        Ok(n) if n > 0 => true,
+        Err(e) => return Err(e),
+        _ => false,
+    } {
+        if *line.last().unwrap() == b'\n' {
+            count += 1;
+        };
     }
-
-    let rp = reqwest::redirect::Policy::none();
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(1))
-        .redirect(rp)
-        .build()
-        .unwrap();
-
-    match client.get(&form_url).send().await {
-        Ok(res) => {
-            if res.status() != 200 {
-                return None;
-            }
-            Some(res)
-        }
-        Err(_) => None,
-    }
+    Ok(count)
 }
 
-pub fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
+pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
     let args = Args::from_iter(mode_args);
 
     if gargs.wordlist.is_none() {
@@ -60,62 +46,130 @@ pub fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
         std::process::exit(-1);
     }
 
-    let runtime = Builder::new_multi_thread()
-        .worker_threads(gargs.threads)
-        .enable_all()
+    let wordlist = gargs.wordlist.unwrap();
+    let url = args.url;
+    let reader = BufReader::new(File::open(&wordlist)?);
+    let word_count: u64 = count_lines(std::fs::File::open(&wordlist).unwrap())?;
+
+    let neg_status_codes: [u16; 1] = [404];
+
+    if !gargs.quiet {
+        println!(
+            "{:-^width$}\n[-] Mode: dir\n[-] URL: {}\n[-] Wordlist: {}\n[-] Count: {}\n[-] Threads: {}\n[-] Ignore Status: {:?}\n{:-^width$}\n",
+            "",
+            url,
+            wordlist.to_str().unwrap(),
+            word_count,
+            gargs.threads,
+            neg_status_codes,
+            "",
+            width = 40,
+        );
+    }
+
+    let pb = if gargs.noprog {
+        ProgressBar::hidden()
+    } else {
+        ProgressBar::new(word_count)
+    };
+    pb.set_draw_delta(word_count / 100);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar:orange/white} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-"),
+    );
+
+    let rp = reqwest::redirect::Policy::none();
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .user_agent("Mozilla/5.0")
+        .timeout(Duration::from_secs(args.timeout))
+        .redirect(rp)
         .build()
         .unwrap();
 
-    let wordlist = gargs.wordlist.unwrap();
-    let url = args.url;
+    let responses = stream::iter(reader.lines())
+        .map(|guess| {
+            let mut g = String::new();
+            g.clone_from(&guess.unwrap());
 
-    let reader = BufReader::new(File::open(&wordlist)?);
+            let client = client.clone();
+            let form_url = if url.ends_with('/') {
+                format!("{}{}", url, g)
+            } else {
+                format!("{}/{}", url, g)
+            };
 
-    if !gargs.quiet {
-        println!("[-] Enumerating {} with {:?}", url, wordlist);
-    }
-
-    let mut handles = VecDeque::new();
-    let mut found = Vec::new();
-
-    for g in reader.lines() {
-        match g {
-            Ok(guess) => {
-                let turl = url.clone();
-                let tv = gargs.verbose;
-                let tnp = gargs.noprog;
-                handles.push_back(runtime.spawn(scanner(turl, guess, tv, tnp)));
+            if gargs.verbose && !gargs.noprog {
+                pb.println(format!("[-] Trying: {}", &form_url));
             }
-            Err(_) => break,
-        }
-        if handles.len() == handles.capacity() {
-            while !handles.is_empty() {
-                let x = runtime.block_on(handles.pop_front().unwrap()).unwrap();
-                match x {
-                    Some(r) => {
-                        if !gargs.noprog {
-                            println!("[+] {} -> {}", r.url(), r.status())
+            tokio::spawn(async move {
+                let resp = client.get(form_url).send().await;
+                //let bytes = resp.unwrap().bytes().await;
+                (g, resp)
+            })
+        })
+        .buffer_unordered(gargs.threads);
+
+    responses
+        .for_each(|b| async {
+            pb.inc(1);
+            match b {
+                Ok((g, Ok(r))) => {
+                    let status = r.status().as_u16();
+                    let url = r.url().to_string();
+                    let bytes = r.bytes().await;
+
+                    if !neg_status_codes.contains(&status) {
+                        if gargs.noprog {
+                            if status != 301 {
+                                println!(
+                                    "/{:20}Status: {} - Size {:?}",
+                                    g,
+                                    status,
+                                    bytes.unwrap().len()
+                                );
+                            } else {
+                                println!(
+                                    "/{:20}Status: {} - Size {:?}\t-> {}",
+                                    g,
+                                    status,
+                                    bytes.unwrap().len(),
+                                    url
+                                );
+                            }
+                        } else {
+                            if status != 301 {
+                                pb.println(format!(
+                                    "/{:30}Status: {} - Size {:?}",
+                                    g,
+                                    status,
+                                    bytes.unwrap().len()
+                                ));
+                            } else {
+                                pb.println(format!(
+                                    "/{:30}Status: {} - Size {:?}\t-> {}",
+                                    g,
+                                    status,
+                                    bytes.unwrap().len(),
+                                    url
+                                ));
+                            }
                         }
-                        found.push(r.url().clone());
                     }
-                    None => {}
                 }
+                Ok((_, Err(e))) => {
+                    if gargs.verbose {
+                        eprintln!("{}", e);
+                    }
+                }
+                Err(e) => eprintln!("[!] tokio::JoinError: {}", e),
             }
-        }
-    }
+        })
+        .await;
 
-    if found.len() > 0 {
-        if !gargs.quiet {
-            println!("\n[-] Found:");
-        }
-        for f in found {
-            println!("{}", f);
-        }
-    } else {
-        if !gargs.quiet {
-            println!("[-] 0 Results")
-        }
-    }
+    pb.finish_with_message("[-] Enumeration complete");
 
     Ok(())
 }

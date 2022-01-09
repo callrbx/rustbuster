@@ -10,3 +10,4 @@ structopt = { version = "0.3", default-features = false }
 reqwest = { version = "*", features = ["json"] } # reqwest with JSON parsing support
 futures = "*" # for our async / await blocks
 tokio = { version = "*", features = ["full"] } # for our async runtime
+indicatif = "*"

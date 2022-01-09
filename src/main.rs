@@ -1,5 +1,4 @@
 use std::{io, path::PathBuf};
-
 use structopt::StructOpt;
 
 mod dir;
@@ -19,7 +18,7 @@ enum Mode {
 )]
 pub struct GlobalArgs {
     #[structopt(
-        default_value = "4",
+        default_value = "10",
         short = "t",
         long = "threads",
         help = "thread count"
@@ -42,13 +41,14 @@ pub struct GlobalArgs {
     mode: Mode,
 }
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     let args = GlobalArgs::from_args();
 
     let gargs = args.clone();
 
     match args.mode {
-        Mode::Dir(mode_args) => dir::exec(gargs, mode_args)?,
+        Mode::Dir(mode_args) => dir::exec(gargs, mode_args).await?,
     };
 
     Ok(())
