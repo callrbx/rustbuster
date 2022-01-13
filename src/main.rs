@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::io;
 use structopt::StructOpt;
 
 mod dir;
@@ -24,19 +24,6 @@ pub struct GlobalArgs {
         help = "thread count"
     )]
     threads: usize,
-    #[structopt(short = "v", long = "verbose", help = "enable verbose output")]
-    verbose: bool,
-    #[structopt(short = "q", long = "quiet", help = "disable normal output")]
-    quiet: bool,
-    #[structopt(short = "z", long = "noprog", help = "disable all progress output")]
-    noprog: bool,
-    #[structopt(
-        short = "w",
-        long = "wordlist",
-        help = "path to wordlist",
-        parse(from_os_str)
-    )]
-    wordlist: Option<PathBuf>,
     #[structopt(name = "mode", help = "Mode", subcommand)]
     mode: Mode,
 }

@@ -3,6 +3,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::{
     fs::File,
     io::{self, BufRead, BufReader},
+    path::PathBuf,
 };
 use structopt::StructOpt;
 use tokio::time::Duration;
@@ -18,6 +19,37 @@ use crate::GlobalArgs;
 struct Args {
     #[structopt(default_value = "1", long = "time", help = "request timeout")]
     timeout: u64,
+    #[structopt(
+        short = "l",
+        long = "--show-len",
+        help = "displays the size of response"
+    )]
+    showlen: bool,
+    #[structopt(
+        short = "r",
+        long = "--show-redir",
+        help = "displays result of a 301 redirect"
+    )]
+    showredir: bool,
+    #[structopt(
+        short = "n",
+        long = "--disable-status",
+        help = "dont display HTTP status codes"
+    )]
+    nostatus: bool,
+    #[structopt(short = "v", long = "verbose", help = "enable verbose output")]
+    verbose: bool,
+    #[structopt(short = "q", long = "quiet", help = "disable normal output")]
+    quiet: bool,
+    #[structopt(short = "z", long = "noprog", help = "disable all progress output")]
+    noprog: bool,
+    #[structopt(
+        short = "w",
+        long = "wordlist",
+        help = "path to wordlist",
+        parse(from_os_str)
+    )]
+    wordlist: Option<PathBuf>,
     #[structopt(short = "u", long = "url", help = "Target URL")]
     url: String,
 }
@@ -41,19 +73,19 @@ fn count_lines<R: io::Read>(handle: R) -> Result<u64, io::Error> {
 pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
     let args = Args::from_iter(mode_args);
 
-    if gargs.wordlist.is_none() {
+    if args.wordlist.is_none() {
         eprintln!("[!] Dir module requires global wordlist: -w <path>");
         std::process::exit(-1);
     }
 
-    let wordlist = gargs.wordlist.unwrap();
+    let wordlist = args.wordlist.unwrap();
     let url = args.url;
     let reader = BufReader::new(File::open(&wordlist)?);
     let word_count: u64 = count_lines(std::fs::File::open(&wordlist).unwrap())?;
 
     let discard: [u16; 1] = [404];
 
-    if !gargs.quiet {
+    if !args.quiet {
         println!(
             "{:-^width$}\n[-] Mode:\tdir\n[-] URL:\t{}\n[-] Wordlist:\t{}\n[-] Count:\t{}\n[-] Threads:\t{}\n[-] Discard:\t{:?}\n{:-^width$}\n",
             "",
@@ -67,7 +99,7 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
         );
     }
 
-    let pb = if gargs.noprog {
+    let pb = if args.noprog {
         ProgressBar::hidden()
     } else {
         ProgressBar::new(word_count)
@@ -101,9 +133,6 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
                 format!("{}/{}", url, g)
             };
 
-            if gargs.verbose && !gargs.noprog {
-                pb.println(format!("[-] Trying: {}", &form_url));
-            }
             tokio::spawn(async move {
                 let resp = client.get(form_url).send().await;
                 //let bytes = resp.unwrap().bytes().await;
@@ -120,48 +149,55 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
                     let status = r.status().as_u16();
                     let url = r.url().to_string();
                     let bytes = r.bytes().await;
+                    let len = match bytes {
+                        Ok(b) => b.len(),
+                        _ => 0,
+                    };
 
-                    if !discard.contains(&status) {
-                        if gargs.noprog {
-                            if status != 301 {
-                                println!(
-                                    "/{:20}Status: {} - Size {:?}",
-                                    g,
-                                    status,
-                                    bytes.unwrap().len()
-                                );
-                            } else {
-                                println!(
-                                    "/{:20}Status: {} - Size {:?}\t-> {}",
-                                    g,
-                                    status,
-                                    bytes.unwrap().len(),
-                                    url
-                                );
-                            }
+                    let mut res_str = String::new();
+
+                    // use good res to continue formating based on arguments
+                    let good_res = if !discard.contains(&status) && !args.verbose {
+                        res_str.push_str(&format!("/{:20}", &g));
+                        true
+                    } else if args.verbose {
+                        if discard.contains(&status) {
+                            res_str.push_str(&format!("Drop: /{:20}", &g));
+                            true
                         } else {
-                            if status != 301 {
-                                pb.println(format!(
-                                    "/{:30}Status: {} - Size {:?}",
-                                    g,
-                                    status,
-                                    bytes.unwrap().len()
-                                ));
-                            } else {
-                                pb.println(format!(
-                                    "/{:30}Status: {} - Size {:?}\t-> {}",
-                                    g,
-                                    status,
-                                    bytes.unwrap().len(),
-                                    url
-                                ));
-                            }
+                            res_str.push_str(&format!("Keep: /{:20}", &g));
+                            true
+                        }
+                    } else {
+                        false
+                    };
+
+                    if good_res {
+                        if !args.nostatus {
+                            res_str.push_str(&format!(" ({})", status));
+                        }
+
+                        if args.showlen {
+                            res_str.push_str(&format!(" [{}]", len));
+                        }
+
+                        if status == 301 && args.showredir {
+                            res_str.push_str(&format!(" => {}", url));
+                        }
+                    }
+
+                    if !res_str.is_empty() {
+                        if args.noprog {
+                            println!("{}", res_str);
+                        } else {
+                            pb.println(res_str);
                         }
                     }
                 }
+
                 Ok((_, Err(e))) => {
-                    if gargs.verbose {
-                        eprintln!("{}", e);
+                    if args.verbose {
+                        eprintln!("[!] {}", e);
                     }
                 }
                 Err(e) => eprintln!("[!] tokio::JoinError: {}", e),
