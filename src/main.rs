@@ -2,6 +2,7 @@ use std::io;
 use structopt::StructOpt;
 
 mod dir;
+mod wordlist;
 
 #[derive(Debug, StructOpt, Clone)]
 enum Mode {

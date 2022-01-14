@@ -1,13 +1,13 @@
 use futures::{stream, StreamExt}; // 0.3.8use reqwest::Response;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{
-    fs::File,
-    io::{self, BufRead, BufReader},
+    io::{self},
     path::PathBuf,
 };
 use structopt::StructOpt;
 use tokio::time::Duration;
 
+use crate::wordlist::Wordlist;
 use crate::GlobalArgs;
 
 #[derive(Debug, StructOpt, Clone)]
@@ -50,24 +50,17 @@ struct Args {
         parse(from_os_str)
     )]
     wordlist: Option<PathBuf>,
-    #[structopt(short = "u", long = "url", help = "Target URL")]
+    #[structopt(long = "prepend", help = "prepend wordlist words (csv)")]
+    prepend: Option<String>,
+    #[structopt(long = "append", help = "append wordlist words (csv)")]
+    append: Option<String>,
+    #[structopt(
+        long = "swap",
+        help = "swap in for entries that contain {{SWAP}} (csv)"
+    )]
+    swap: Option<String>,
+    #[structopt(short = "u", long = "url", help = "target url")]
     url: String,
-}
-
-fn count_lines<R: io::Read>(handle: R) -> Result<u64, io::Error> {
-    let mut reader = BufReader::new(handle);
-    let mut count = 0;
-    let mut line: Vec<u8> = Vec::new();
-    while match reader.read_until(b'\n', &mut line) {
-        Ok(n) if n > 0 => true,
-        Err(e) => return Err(e),
-        _ => false,
-    } {
-        if *line.last().unwrap() == b'\n' {
-            count += 1;
-        };
-    }
-    Ok(count)
 }
 
 pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
@@ -80,20 +73,24 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
 
     let wordlist = args.wordlist.unwrap();
     let url = args.url;
-    let reader = BufReader::new(File::open(&wordlist)?);
-    let word_count: u64 = count_lines(std::fs::File::open(&wordlist).unwrap())?;
+
+    let wl = Wordlist::new(&wordlist, args.prepend, args.append, args.swap);
 
     let discard: [u16; 1] = [404];
 
     if !args.quiet {
         println!(
-            "{:-^width$}\n[-] Mode:\tdir\n[-] URL:\t{}\n[-] Wordlist:\t{}\n[-] Count:\t{}\n[-] Threads:\t{}\n[-] Discard:\t{:?}\n{:-^width$}\n",
+            "{:-^width$}\n[*] Mode:\tdir\n[*] URL:\t{}\n[*] Wordlist:\t{} ({} entries)\n[*] Count:\t{}\n[*] Threads:\t{}\n[*] Discard:\t{:?}\n[*] Prepend:\t{:?}\n[*] Append:\t{:?}\n[*] Swap:\t{:?}\n{:-^width$}\n",
             "",
             url,
             wordlist.to_str().unwrap(),
-            word_count,
+            wl.base_count,
+            wl.total_count,
             gargs.threads,
             discard,
+            wl.prepend,
+            wl.append,
+            wl.swap,
             "",
             width = 40,
         );
@@ -102,29 +99,27 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
     let pb = if args.noprog {
         ProgressBar::hidden()
     } else {
-        ProgressBar::new(word_count)
+        ProgressBar::new(wl.total_count as u64)
     };
-    pb.set_draw_delta(word_count / 100);
+    pb.set_draw_delta(wl.total_count as u64 / 100);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar:orange/white} {pos:>7}/{len:7} {msg}")
             .progress_chars("##-"),
     );
 
-    let rp = reqwest::redirect::Policy::none();
-
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent("Mozilla/5.0")
         .timeout(Duration::from_secs(args.timeout))
-        .redirect(rp)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap();
 
-    let responses = stream::iter(reader.lines())
+    let responses = stream::iter(wl.into_iter())
         .map(|guess| {
             let mut g = String::new();
-            g.clone_from(&guess.unwrap());
+            g.clone_from(&guess);
 
             let client = client.clone();
             let form_url = if url.ends_with('/') {
