@@ -13,6 +13,7 @@ pub struct Wordlist {
     pub prepend: Vec<String>,
     pub append: Vec<String>,
     pub swap: Vec<String>,
+    pub extensions: Vec<String>,
     word_perms: VecDeque<String>,
 }
 
@@ -50,6 +51,7 @@ impl Wordlist {
         prepend: Option<String>,
         append: Option<String>,
         swap: Option<String>,
+        extensions: Option<String>,
     ) -> Self {
         let pre_strs = prepend
             .unwrap_or(String::new())
@@ -63,6 +65,12 @@ impl Wordlist {
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         let app_len = app_strs.len();
+        let ext_strs = extensions
+            .unwrap_or(String::new())
+            .split(",")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+        let ext_len = ext_strs.len();
         let swap_strs = swap
             .unwrap_or(String::new())
             .split(",")
@@ -77,7 +85,8 @@ impl Wordlist {
             prepend: pre_strs,
             append: app_strs,
             swap: swap_strs,
-            total_count: word_count * pre_len * app_len * swap_len,
+            extensions: ext_strs,
+            total_count: word_count * pre_len * app_len * swap_len * ext_len,
             word_perms: VecDeque::new(),
         }
     }
@@ -110,6 +119,12 @@ impl Iterator for Wordlist {
                                 for a in &self.append {
                                     self.word_perms.push_back(format!("{}{}{}", p, b, a));
                                 }
+                            }
+                        }
+
+                        for w in self.word_perms.clone() {
+                            for e in &self.extensions {
+                                self.word_perms.push_back(format!("{}{}", w, e));
                             }
                         }
                     } else {

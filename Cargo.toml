@@ -9,3 +9,4 @@ reqwest = { version = "*", features = ["json"] } # reqwest with JSON parsing sup
 futures = "*" # for our async / await blocks
 tokio = { version = "*", features = ["full"] } # for our async runtime
 indicatif = "*"
+itertools = "*"
