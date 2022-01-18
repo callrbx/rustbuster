@@ -1,4 +1,4 @@
-use futures::{stream, StreamExt}; // 0.3.8use reqwest::Response;
+use futures::{stream, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{
     io::{self},
