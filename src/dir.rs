@@ -46,12 +46,12 @@ struct Args {
     prepend: Option<String>,
     #[structopt(short = "a", long = "append", help = "append wordlist words (csv)")]
     append: Option<String>,
-    #[structopt(short = "x", long = "extensoins", help = "extensions to search (csv)")]
+    #[structopt(short = "x", long = "extensions", help = "extensions to search (csv)")]
     extensions: Option<String>,
     #[structopt(
         short = "s",
         long = "swap",
-        help = "swap in for entries that contain {{SWAP}} (csv)"
+        help = "swap in for entries that contain {SWAP} (csv)"
     )]
     swap: Option<String>,
     #[structopt(
