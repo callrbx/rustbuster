@@ -13,7 +13,7 @@ use crate::GlobalArgs;
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
     name = "rustbuster-dir-plugin",
-    author = "Drew Parker",
+    author = "icon",
     about = "rustbuster dir enumerator"
 )]
 struct Args {

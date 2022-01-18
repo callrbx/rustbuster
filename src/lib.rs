@@ -12,7 +12,7 @@ pub enum Mode {
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
     name = "rustbuster",
-    author = "Drew Parker",
+    author = "icon",
     about = "modular endpoint enumeration tool",
     long_about = "web enumeration tool written in Rust."
 )]
