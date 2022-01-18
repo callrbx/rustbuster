@@ -4,10 +4,17 @@ version = "0.1.0"
 edition = "2021"
 authors = ["icon [drew@parker.systems]"]
 
+[lib]
+name = "librb"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustbuster"
+path = "src/main.rs"
+
 [dependencies]
-structopt = { version = "0.3", default-features = false }
-reqwest = { version = "*", features = ["json"] } # reqwest with JSON parsing support
-futures = "*" # for our async / await blocks
-tokio = { version = "*", features = ["full"] } # for our async runtime
-indicatif = "*"
-itertools = "*"
+structopt = { version = "^0.3.25", default-features = false }
+reqwest = { version = "^0.11.9", features = ["json"] }
+futures = "^0.3.19"
+tokio = { version = "^1.15.0", features = ["full"] }
+indicatif = "^0.16.2"

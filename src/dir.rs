@@ -17,7 +17,7 @@ use crate::GlobalArgs;
     about = "rustbuster dir enumerator"
 )]
 struct Args {
-    #[structopt(default_value = "1", long = "time", help = "request timeout")]
+    #[structopt(default_value = "1", long = "time", help = "request timeout (seconds)")]
     timeout: u64,
 
     #[structopt(short = "l", long = "show-len", help = "displays the size of response")]
