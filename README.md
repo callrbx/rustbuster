@@ -280,10 +280,7 @@ Drop: /produserpanel3.html (404)
 As you can see, with even just a minimal wordlist we can produce numerous guesses for enumeration.
 
 Future Features (in no particular order):
-- Custom Headers
-- Cookies
-- Custom User Agent
-- Basic Auth
+- Basic Auth (better method than raw headers)
 
 ## TODO Modules
 ### S3 Bucket
