@@ -6,6 +6,15 @@ Please use for CTF purposes only.
 Modules currently supported:
 - dir - webserver file/directory
 
+## Install
+Install is simple; just clone and cargo install!
+```
+git clone https://github.com/callrbx/rustbuster.git
+cd rustbuster
+cargo install --path .
+```
+Note: This requires your $PATH to include the `~/.cargo/bin` folder.
+
 ## Modules
 ### base
 The base tool currently has very few options, and most options are handled via the modules.
@@ -107,6 +116,12 @@ Basic:
 /accessibility (301)
 [00:00:00] ################################       5/5       [-] Enumeration complete
 ```
+
+Custom Cookies, Headers, and User Agent:
+```
+❯ rustbuster dir -w test.txt -u $TARGET -H 'test: value' -H 'test2: value2' -A haxor -C cookie1=yes -C cookie2=no` -A "SecretAgent"
+```
+
 
 Quiet + No Progress + No Status:
 ```

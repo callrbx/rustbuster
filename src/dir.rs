@@ -1,8 +1,10 @@
 use futures::{stream, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
+use reqwest::{header, redirect, Client};
 use std::{
     io::{self},
     path::PathBuf,
+    str::FromStr,
 };
 use structopt::StructOpt;
 use tokio::time::Duration;
@@ -14,7 +16,7 @@ use crate::GlobalArgs;
 #[structopt(
     name = "rustbuster-dir-plugin",
     author = "icon",
-    about = "rustbuster dir enumerator"
+    about = "rustbuster dir enumerator plugin"
 )]
 struct Args {
     #[structopt(default_value = "1", long = "time", help = "request timeout (seconds)")]
@@ -42,6 +44,25 @@ struct Args {
     noprog: bool,
     #[structopt(short = "e", long = "expand", help = "display full url")]
     exapand: bool,
+    #[structopt(
+        short = "H",
+        long = "header",
+        help = "custom headers (-H \"H1: V1\" -H \"H2: V2\")"
+    )]
+    headers: Option<Vec<String>>,
+    #[structopt(
+        short = "C",
+        long = "cookies",
+        help = "custom cookies (-C \"C1=V1\" -C \"C2=C2\")"
+    )]
+    cookies: Option<Vec<String>>,
+    #[structopt(
+        short = "A",
+        long = "agent",
+        help = "user agent",
+        default_value = "Mozilla/5.0"
+    )]
+    agent: String,
     #[structopt(short = "p", long = "prepend", help = "prepend wordlist words (csv)")]
     prepend: Option<String>,
     #[structopt(short = "a", long = "append", help = "append wordlist words (csv)")]
@@ -96,8 +117,23 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
 
     if !args.quiet {
         println!(
-            "{:-^width$}\n[*] Mode:\tdir\n[*] URL:\t{}\n[*] Wordlist:\t{} ({} entries)\n[*] Count:\t{}\n[*] Threads:\t{}\n[*] Discard:\t{:?}\n[*] Prepend:\t{:?}\n[*] Append:\t{:?}\n[*] Swap:\t{:?}\n[*] Ext:\t{:?}\n{:-^width$}\n",
+            concat!(
+                "{:-^width$}\n",
+                "[*] Mode:\tdir\n",
+                "[*] User-Agent\t{:?}\n",
+                "[*] URL:\t{}\n",
+                "[*] Wordlist:\t{} ({} entries)\n",
+                "[*] Count:\t{}\n",
+                "[*] Threads:\t{}\n",
+                "[*] Discard:\t{:?}\n",
+                "[*] Prepend:\t{:?}\n",
+                "[*] Append:\t{:?}\n",
+                "[*] Swap:\t{:?}\n",
+                "[*] Ext:\t{:?}\n",
+                "{:-^width$}\n"
+            ),
             "",
+            args.agent,
             url,
             wordlist.to_str().unwrap(),
             wl.base_count,
@@ -126,11 +162,34 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
             .progress_chars("##-"),
     );
 
-    let client = reqwest::Client::builder()
+    // Headers expected like "Header: Value"
+    let mut headers = header::HeaderMap::new();
+    args.headers.map(|hdrs| {
+        for h in hdrs {
+            let (key, val) = h.split_once(": ").unwrap_or(("", ""));
+            headers.insert(
+                header::HeaderName::from_str(key).unwrap(),
+                header::HeaderValue::from_str(val).unwrap(),
+            );
+        }
+    });
+
+    // Cookies expected like "key=value;"
+    // Just add Cookie header instead of mucking with cookie stores; overkill
+    if args.cookies.is_some() {
+        let cookie_str = format!("{};", args.cookies.unwrap().join("; "));
+        headers.insert(
+            "Cookie",
+            header::HeaderValue::from_str(&cookie_str).unwrap(),
+        );
+    }
+
+    let client = Client::builder()
         .danger_accept_invalid_certs(args.ignoretls)
-        .user_agent("Mozilla/5.0")
+        .user_agent(args.agent)
+        .default_headers(headers)
         .timeout(Duration::from_secs(args.timeout))
-        .redirect(reqwest::redirect::Policy::none())
+        .redirect(redirect::Policy::none())
         .build()
         .unwrap();
 
@@ -225,7 +284,7 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
 
                     if !res_str.is_empty() {
                         if args.noprog {
-                            println!("{}", res_str);
+                            println!("{res_str}");
                         } else {
                             pb.println(res_str);
                         }
@@ -234,10 +293,10 @@ pub async fn exec(gargs: GlobalArgs, mode_args: Vec<String>) -> io::Result<()> {
 
                 Ok((_, Err(e))) => {
                     if args.verbose {
-                        eprintln!("[!] {}", e);
+                        eprintln!("[!] {e}");
                     }
                 }
-                Err(e) => eprintln!("[!] tokio::JoinError: {}", e),
+                Err(e) => eprintln!("[!] tokio::JoinError: {e}"),
             }
         })
         .await;
