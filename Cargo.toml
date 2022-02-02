@@ -18,3 +18,4 @@ reqwest = { version = "^0.11.9", features = ["json"] }
 futures = "^0.3.19"
 tokio = { version = "^1.15.0", features = ["full"] }
 indicatif = "^0.16.2"
+wlinflate = "^0.1.1"

@@ -1,7 +1,6 @@
 use structopt::StructOpt;
 
 pub mod dir;
-pub mod wordlist;
 
 #[derive(Debug, StructOpt, Clone)]
 pub enum Mode {

@@ -8,8 +8,8 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::time::Duration;
+use wlinflate::Wordlist;
 
-use crate::wordlist::Wordlist;
 use crate::GlobalArgs;
 
 #[derive(Debug, StructOpt, Clone)]
