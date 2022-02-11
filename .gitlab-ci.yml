@@ -17,7 +17,7 @@ Lint:
   script:
     - rustup component add rustfmt
     - test -d ./$CUR_PROJ/src || exit
-    - find ./$CUR_PROJ/src -type f -name "*.rs" | xargs rustfmt
+    - cargo fmt
 
 Build:
   needs: ["Lint"]
