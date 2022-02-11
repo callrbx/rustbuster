@@ -4,7 +4,7 @@ stages:
   - test
 
 .container:
-  image: rust:1.58
+  image: rust
   stage: build
   interruptible: true
   allow_failure: false
