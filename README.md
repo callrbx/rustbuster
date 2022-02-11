@@ -1,3 +1,5 @@
+![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/drew/rustbuster?branch=main&gitlab_url=https%3A%2F%2Fgitlab.parker.systems&style=for-the-badge)
+
 # Basic Enumeration Tool in Rust
 
 This tool is intended to be a fully modular, wordlist based enumeration tool.

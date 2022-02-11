@@ -1,0 +1,44 @@
+stages:
+  - lint
+  - build
+  - test
+
+.container:
+  image: rust
+  stage: build
+  interruptible: true
+  allow_failure: false
+  timeout: 10m
+
+Lint:
+  extends:
+    - .container
+  stage: lint
+  script:
+    - rustup component add rustfmt
+    - test -d ./$CUR_PROJ/src || exit
+    - find ./$CUR_PROJ/src -type f -name "*.rs" | xargs rustfmt
+
+Build:
+  needs: ["Lint"]
+  extends:
+    - .container
+  stage: build
+  script:
+    - cargo build -v
+  artifacts:
+    paths:
+    - target/release/
+
+Test:
+  needs: ["Build"]
+  extends:
+    - .container
+  stage: test
+  script:
+    - cargo test 
+
+
+
+
+
