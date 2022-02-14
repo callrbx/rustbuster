@@ -281,9 +281,6 @@ Drop: /produserpanel3.html (404)
 ```
 As you can see, with even just a minimal wordlist we can produce numerous guesses for enumeration.
 
-Future Features (in no particular order):
-- Basic Auth (better method than raw headers)
-
 ## TODO Modules
 ### S3 Bucket
 ### VHost
